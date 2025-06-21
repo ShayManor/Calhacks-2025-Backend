@@ -17,7 +17,8 @@ AGENT = Agent(
     name="ping-llm2",
     seed=os.getenv("FETCH_SEED", "auto-generated"),
     port=8000,
-    endpoint=["http://0.0.0.0:8000/submit"]
+    endpoint=["http://0.0.0.0:8000/submit"],
+    mailbox=True
 )
 
 BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
@@ -25,6 +26,7 @@ BACKEND = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 @AGENT.on_message(model=Prompt, replies=Reply)
 async def call_backend(ctx: Context, sender: str, msg: Prompt):
+    print(f"Agent address is {ctx.agent.address}")
     r = requests.post(f"{BACKEND}/generate", json={"prompt": msg.prompt, "llm": "gpt"})
     ctx.logger.info("backend status %s", r.status_code)
     await ctx.send(sender, Reply(result=r.json().get("result", "")))

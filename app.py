@@ -15,9 +15,9 @@ def ping():
 @app.route("/create_agent")
 def create():
     start = time.time()
-    res = jsonify({'response': create_agent("tttkys")})
+    res = create_agent("Create an agent that takes a query and pings an LLM with that query.")
     print(f'Total time: {time.time() - start}')
-    return res
+    return jsonify({'response': res})
 
 
 if __name__ == '__main__':
