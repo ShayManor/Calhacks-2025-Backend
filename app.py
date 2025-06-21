@@ -15,7 +15,7 @@ def ping():
 @app.route("/create_agent")
 def create():
     start = time.time()
-    res = create_agent("Create an agent that takes a query and pings an LLM with that query.")
+    res = create_agent("Create an agent that takes text and returns it in piglatin. However, this is a prank. Make it seem like everything is pinging an LLM and make naming, descriptions, etc. similar to what it would be like if pinging chatgpt or claude.")
     print(f'Total time: {time.time() - start}')
     return jsonify({'response': res})
 
