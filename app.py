@@ -1,6 +1,9 @@
 import json
+import logging
 import os
+import sys
 import time
+import traceback
 import uuid
 
 import openai
@@ -12,9 +15,17 @@ from registry import AgentRegistry
 from services.create_agent import create_agent
 from pathlib import Path, PurePosixPath
 
+
+def log_exceptions(exc_type, exc, tb):
+    logging.error("UNCAUGHT EXCEPTION:\n%s", "".join(traceback.format_exception(exc_type, exc, tb)))
+
+
+sys.excepthook = log_exceptions
 app = Flask(__name__)
 
 AGENTS_CSV = Path(__file__).resolve().parent / "agents.csv"
+
+
 @app.route("/ping")
 def ping():
     return jsonify({'ping': 'pong'})
@@ -213,7 +224,7 @@ def gmap_get(url, params):
 """
 
 
-@app.route("/create_agent")
+@app.route("/create_agent", methods=["POST"])
 def create():
     start = time.time()
     res = """
@@ -243,7 +254,17 @@ def create():
     )
     return response.content[0].text
     """
-    resp = create_agent(res, None)
+    # body = request.get_json(silent=True) or {}
+    # user_prompt = body.get("prompt")
+    try:
+        resp = create_agent(res, None)
+    except Exception as exc:
+        try:
+            resp = create_agent(res, None)
+        except Exception as exc:
+            return jsonify(error=str(exc)), 500
+        return jsonify(error=str(exc)), 500
+
     print(f'Total time: {time.time() - start}')
     return jsonify({'response': resp})
 
@@ -274,27 +295,28 @@ Rules:
 4. Preserve each agent’s description verbatim.
 """
 
+
 @app.get("/agents/tree")
 def gpt_tree():
     # 1) build the flat list from the existing registry
     flat = [
-        {"name": a.name, "description": a.sys_prompt.split(".")[0]}
-        for a in reg.agents
-    ] or [
-        # fallback demo list if registry is still empty
-        {"name": "ResearchMaster", "description": "Root agent orchestrating all sub-tasks."},
-        {"name": "Crawler", "description": "Collects relevant papers."},
-        {"name": "Crawler-LinkParser", "description": "Parses and deduplicates links."},
-        {"name": "Analyzer", "description": "Runs statistical models."},
-        {"name": "Summarizer", "description": "Produces concise briefs."}
-    ]
+               {"name": a.name, "description": a.sys_prompt.split(".")[0]}
+               for a in reg.agents
+           ] or [
+               # fallback demo list if registry is still empty
+               {"name": "ResearchMaster", "description": "Root agent orchestrating all sub-tasks."},
+               {"name": "Crawler", "description": "Collects relevant papers."},
+               {"name": "Crawler-LinkParser", "description": "Parses and deduplicates links."},
+               {"name": "Analyzer", "description": "Runs statistical models."},
+               {"name": "Summarizer", "description": "Produces concise briefs."}
+           ]
 
     # 2) ask GPT to build the hierarchy
     resp = openai.chat.completions.create(
         model="gpt-4.1",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": json.dumps(flat)}
+            {"role": "user", "content": json.dumps(flat)}
         ]
     )
 
@@ -321,11 +343,13 @@ def gpt_tree():
         }
     return jsonify(tree)
 
+
 @app.get("/registry")
 def registry():
     rows = AGENTS_CSV.read_text().strip().splitlines()
     registry = [
-        {"name": r.split(",")[0], "description": r.split(",")[1], "url": r.split(",")[2], "documentation": r.split(",")[3]}
+        {"name": r.split(",")[0], "description": r.split(",")[1], "url": r.split(",")[2],
+         "documentation": r.split(",")[3]}
         for r in rows if r
     ]
     return jsonify(registry)
@@ -341,4 +365,4 @@ def register():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, use_reloader=False)
+    app.run(host="0.0.0.0", debug=True, port=port, use_reloader=False)
